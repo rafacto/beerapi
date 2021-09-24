@@ -45,6 +45,6 @@ public class BeerController {
 
     @PatchMapping("/{id}/increment")
     public BeerDTO incrementStock(@PathVariable Long id, @RequestBody @Valid QuantityDTO quantityDTO) throws BeerNotFoundException, BeerStockExceededException {
-        return beerService.incrementStock(id, quantityDTO.getQuantity());
+        return beerService.incrementBeer(id, quantityDTO.getQuantity());
     }
 }

@@ -2,8 +2,10 @@ package one.digitalinnovation.beerapi.controller;
 
 import one.digitalinnovation.beerapi.builder.BeerDTOBuilder;
 import one.digitalinnovation.beerapi.dto.BeerDTO;
+import one.digitalinnovation.beerapi.dto.QuantityDTO;
 import one.digitalinnovation.beerapi.exception.BeerAlreadyRegisteredException;
 import one.digitalinnovation.beerapi.exception.BeerNotFoundException;
+import one.digitalinnovation.beerapi.exception.BeerStockExceededException;
 import one.digitalinnovation.beerapi.service.BeerService;
 import one.digitalinnovation.beerapi.utils.JsonConverterUtils;
 import org.hamcrest.MatcherAssert;
@@ -18,7 +20,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.view.json.MappingJackson2JsonView;
 
@@ -145,6 +146,59 @@ public class BeerControllerTest {
 
         // then
         mockMvc.perform(delete(BEER_API_URL_PATH + "/" + nonExistentId))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void whenPATCHIncrementQuantityExistentBeerThenOkStatusIsReturned() throws Exception {
+        // given
+        BeerDTO beerToBeIncremented = BeerDTOBuilder.builder().build().toBeerDTO();
+        QuantityDTO increment = QuantityDTO.builder().quantity(10).build();
+
+        // when
+        beerToBeIncremented.setQuantity(beerToBeIncremented.getQuantity() + increment.getQuantity());
+        when(beerService.incrementBeer(beerToBeIncremented.getId(), increment.getQuantity())).thenReturn(beerToBeIncremented);
+
+        // then
+        mockMvc.perform(patch(BEER_API_URL_PATH + "/" + beerToBeIncremented.getId() + "/increment")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(JsonConverterUtils.DTOtoJsonString(increment)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name", Matchers.is(beerToBeIncremented.getName())))
+                .andExpect(jsonPath("$.brand", Matchers.is(beerToBeIncremented.getBrand())))
+                .andExpect(jsonPath("$.quantity", Matchers.is(beerToBeIncremented.getQuantity())));
+    }
+
+    @Test
+    void whenPATCHIncrementQuantityGreaterThenMaxExistentBeerThenBadRequestIsReturned() throws Exception {
+        // given
+        BeerDTO beerToBeIncremented = BeerDTOBuilder.builder().build().toBeerDTO();
+        QuantityDTO increment = QuantityDTO.builder().quantity(10).build();
+
+        // when
+        beerToBeIncremented.setQuantity(beerToBeIncremented.getQuantity() + increment.getQuantity());
+        when(beerService.incrementBeer(beerToBeIncremented.getId(), increment.getQuantity())).thenThrow(BeerStockExceededException.class);
+
+        // then
+        mockMvc.perform(patch(BEER_API_URL_PATH + "/" + beerToBeIncremented.getId() + "/increment")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(JsonConverterUtils.DTOtoJsonString(increment)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void whenPATCHIncrementQuantityNonexistentBeerThenNotFoundIsReturned() throws Exception {
+        // given
+        Long beerToBeIncrementedId = BeerDTOBuilder.builder().build().toBeerDTO().getId();
+        QuantityDTO increment = QuantityDTO.builder().quantity(10).build();
+
+        // when
+        when(beerService.incrementBeer(beerToBeIncrementedId, increment.getQuantity())).thenThrow(BeerNotFoundException.class);
+
+        // then
+        mockMvc.perform(patch(BEER_API_URL_PATH + "/" + beerToBeIncrementedId + "/increment")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(JsonConverterUtils.DTOtoJsonString(increment)))
                 .andExpect(status().isNotFound());
     }
 }
