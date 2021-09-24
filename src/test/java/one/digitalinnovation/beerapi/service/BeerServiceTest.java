@@ -4,8 +4,9 @@ import one.digitalinnovation.beerapi.builder.BeerDTOBuilder;
 import one.digitalinnovation.beerapi.dto.BeerDTO;
 import one.digitalinnovation.beerapi.entity.Beer;
 import one.digitalinnovation.beerapi.exception.BeerAlreadyRegisteredException;
+import one.digitalinnovation.beerapi.exception.BeerInsufficientStockException;
 import one.digitalinnovation.beerapi.exception.BeerNotFoundException;
-import one.digitalinnovation.beerapi.exception.BeerStockExceededException;
+import one.digitalinnovation.beerapi.exception.BeerExceededStockException;
 import one.digitalinnovation.beerapi.mapper.BeerMapper;
 import one.digitalinnovation.beerapi.repository.BeerRepository;
 import org.junit.jupiter.api.Test;
@@ -141,7 +142,7 @@ public class BeerServiceTest {
     }
 
     @Test
-    void whenIncrementExistentBeerThenIncrementItsQuantity() throws BeerNotFoundException, BeerStockExceededException {
+    void whenIncrementExistentBeerThenIncrementItsQuantity() throws BeerNotFoundException, BeerExceededStockException {
         //given
         BeerDTO informedBeerDTO = BeerDTOBuilder.builder().build().toBeerDTO();
         Beer beerToBeIncremented = beerMapper.toModel(informedBeerDTO);
@@ -170,20 +171,65 @@ public class BeerServiceTest {
         when(beerRepository.findById(informedBeerDTO.getId())).thenReturn(Optional.of(beerToBeIncremented));
 
         //then
-        assertThrows(BeerStockExceededException.class, () -> beerService.incrementBeer(informedBeerDTO.getId(), increment));
+        assertThrows(BeerExceededStockException.class, () -> beerService.incrementBeer(informedBeerDTO.getId(), increment));
     }
 
     @Test
-    void whenIncrementNonexistentBeerThenExceptionIsThrown() throws BeerNotFoundException, BeerStockExceededException {
+    void whenIncrementNonexistentBeerThenExceptionIsThrown() {
         //given
-        BeerDTO informedBeerDTO = BeerDTOBuilder.builder().build().toBeerDTO();
+        Long informedBeerDTOId = BeerDTOBuilder.builder().build().toBeerDTO().getId();
         int increment = 10;
 
         //when
-        when(beerRepository.findById(informedBeerDTO.getId())).thenReturn(Optional.empty());
+        when(beerRepository.findById(informedBeerDTOId)).thenReturn(Optional.empty());
 
         //then
-        assertThrows(BeerNotFoundException.class, () -> beerService.incrementBeer(informedBeerDTO.getId(), increment));
+        assertThrows(BeerNotFoundException.class, () -> beerService.incrementBeer(informedBeerDTOId, increment));
     }
 
+    @Test
+    void whenDecrementExistentBeerThenDecrementItsQuantity() throws BeerNotFoundException, BeerInsufficientStockException {
+        //given
+        BeerDTO informedBeerDTO = BeerDTOBuilder.builder().build().toBeerDTO();
+        Beer beerToBeDecremented = beerMapper.toModel(informedBeerDTO);
+
+        //when
+        when(beerRepository.findById(informedBeerDTO.getId())).thenReturn(Optional.of(beerToBeDecremented));
+        when(beerRepository.save(beerToBeDecremented)).thenReturn(beerToBeDecremented);
+
+        //then
+        int decrement = 10;
+        int quantityAfterDecrement = beerToBeDecremented.getQuantity() - decrement;
+
+        BeerDTO decrementedBeerDTO = beerService.decrementBeer(informedBeerDTO.getId(), decrement);
+        assertThat(decrementedBeerDTO.getQuantity(), is(equalTo(quantityAfterDecrement)));
+        assertThat(decrementedBeerDTO.getQuantity(), is(greaterThanOrEqualTo(0)));
+    }
+
+    @Test
+    void whenDecrementExistentBeerExceedingStockQuantityThenExceptionIsThrown() {
+        //given
+        BeerDTO informedBeerDTO = BeerDTOBuilder.builder().build().toBeerDTO();
+        Beer beerToBeDecremented = beerMapper.toModel(informedBeerDTO);
+        int decrement = 31;
+
+        //when
+        when(beerRepository.findById(informedBeerDTO.getId())).thenReturn(Optional.of(beerToBeDecremented));
+
+        //then
+        assertThrows(BeerInsufficientStockException.class, () -> beerService.decrementBeer(informedBeerDTO.getId(), decrement));
+    }
+
+    @Test
+    void whenDecrementNonexistentBeerThenExceptionIsThrown()  {
+        //given
+        Long informedBeerDTOId = BeerDTOBuilder.builder().build().toBeerDTO().getId();
+        int decrement = 10;
+
+        //when
+        when(beerRepository.findById(informedBeerDTOId)).thenReturn(Optional.empty());
+
+        //then
+        assertThrows(BeerNotFoundException.class, () -> beerService.decrementBeer(informedBeerDTOId, decrement));
+    }
 }
